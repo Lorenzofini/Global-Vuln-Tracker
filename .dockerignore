@@ -1,0 +1,27 @@
+# Ignora l'ambiente virtuale
+../.venv/
+venv/
+
+# Ignora i file di cache di Python
+__pycache__/
+*.pyc
+
+# Ignora i file di configurazione di Git e IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Ignora i file di Docker stessi
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# --- FONDAMENTALE PER LA SICUREZZA E LO STATO ---
+# Non includere MAI le credenziali nell'immagine!
+.env
+.env.example
+
+# Non includere il file di stato nell'immagine, va gestito esternamente con i volumi
+processed_vulnerabilities.json
+processed_vulnerabilities.json.bak

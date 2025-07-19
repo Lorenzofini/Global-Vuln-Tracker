@@ -1,0 +1,103 @@
+settings:
+  # Intervallo di polling in minuti. Il sistema controllerà le fonti ogni X minuti.
+  polling_interval_minutes: 15
+  # Data di inizio per la raccolta delle vulnerabilità (formato YYYY-MM-DD).
+  start_date: "2025-01-01"
+
+  filters:
+    # Se 'enabled' è true, verranno applicati i filtri sottostanti.
+    # Se è false, il bot notificherà tutto (come fa ora).
+    enabled: false
+
+    # Invia una notifica SOLO se il punteggio CVSS è uguale o superiore a questo valore.
+    # Imposta a 0.0 per non filtrare per punteggio.
+    # Le vulnerabilità senza punteggio (es. da fonti RSS) verranno notificate
+    # solo se passano il filtro per parole chiave (se attivo).
+    min_cvss_score: 7.0 # Esempio: solo vulnerabilità ALTE e CRITICHE
+
+    # Invia una notifica SOLO se il titolo o la descrizione contengono ALMENO UNA
+    # di queste parole chiave. Il controllo non è case-sensitive.
+    # Lascia la lista vuota ([]) per non filtrare per parole chiave.
+    keywords:
+      - "windows"
+      - "vmware"
+      - "exchange"
+      - "apache"
+      - "nginx"
+      - "php"
+      - "cisco"
+      - "fortinet"
+      - "openssl"
+
+    # Logica di combinazione dei filtri:
+    # - "OR": una notifica passa se soddisfa ALMENO UNO dei filtri (CVSS o Keyword).
+    # - "AND": una notifica passa solo se soddisfa ENTRAMBI i filtri (CVSS e Keyword).
+    # "OR" è generalmente più utile per non perdere notifiche importanti.
+    logic: "OR" # Può essere "OR" o "AND"
+
+# Elenco delle fonti di vulnerabilità da monitorare.
+# Ogni fonte ha un nome (per i log), un tipo (per selezionare l'handler corretto)
+# e parametri specifici come l'URL.
+sources:
+  - name: "RedHotCyber"
+    type: "rss"
+    enabled: true
+    url: "https://www.redhotcyber.com/feed/"
+
+  - name: "ACN (Agenzia per la Cybersicurezza Nazionale)"
+    type: "rss"
+    enabled: true
+#    url: "https://www.acn.gov.it/acn-avvisi-rss"
+    url: "https://www.acn.gov.it/portale/feedrss/-/journal/rss/20119/723192"
+
+  - name: "The Hacker News"
+    type: "rss"
+    enabled: true
+    url: "https://feeds.feedburner.com/TheHackersNews"
+
+  - name: "BleepingComputer"
+    type: "rss"
+    enabled: true
+    url: "https://www.bleepingcomputer.com/feed/"
+
+  - name: "US-CERT Alerts"
+    type: "rss"
+    enabled: true
+    url: "https://www.cisa.gov/uscert/ncas/current-activity.xml"
+
+  - name: "CERT-EU"
+    type: "rss"
+    enabled: true
+    url: "https://cert.europa.eu/publications/security-advisories-rss"
+
+  - name: "ExploitDB"
+    type: "rss"
+    enabled: true
+    url: "https://www.exploit-db.com/rss.xml"
+
+  - name: "CISA KEV (Known Exploited Vulnerabilities)"
+    type: "cisa_kev"
+    enabled: true
+    url: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+
+#  - name: "NVD (National Vulnerability Database)"
+  - name: "NVD"
+    type: "nvd"
+    enabled: true
+    # L'API Key per NVD 2.0 è opzionale ma fortemente raccomandata per evitare rate limit.
+    # Verrà letta dalla variabile d'ambiente NVD_API_KEY.
+
+  - name: "OSV.dev (Go Ecosystem)"
+    type: "osv"
+    enabled: false
+    # OSV.dev non ha una singola API "get latest".
+    # Usiamo il feed Atom dei commit del loro database per uno specifico ecosistema.
+    # Questo è un esempio per Go. Puoi aggiungerne altri (es. PyPI, Maven).
+#    url: "https://github.com/google/osv.dev/commits/master/vulns/Go.atom"
+    url: "https://github.com/github/advisory-database/commits/main.atom"
+
+  - name: "GitHub Security Advisories"
+    type: "github"
+    enabled: true
+    # Richiede un token GitHub con permessi di lettura per gli avvisi di sicurezza.
+    # Verrà letto dalla variabile d'ambiente GITHUB_TOKEN.
