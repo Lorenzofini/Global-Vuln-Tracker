@@ -19,6 +19,7 @@ class Vulnerability:
     description: str = ""
     cvss_score: float = None
     cvss_vector: str = None
+    has_public_exploit: bool = False
 
     def __str__(self):
         return f"[{self.source}] {self.title}"
@@ -39,6 +40,10 @@ class Vulnerability:
             else:
                 header_text = f"⚪️ VULNERABILITÀ BASSA ({self.cvss_score})"
 
+        exploit_warning = ""
+        if self.has_public_exploit:
+            exploit_warning = "<b>❗️ EXPLOIT PUBBLICO DISPONIBILE ❗️</b>\n\n"
+
         # 2. Prepara la riga del titolo, facendo l'escape di eventuali caratteri HTML
         clean_title = html.escape(self.title)
 
@@ -57,6 +62,7 @@ class Vulnerability:
 
         # 4. Assembla il messaggio finale
         message = (
+            f"{exploit_warning}\n"
             f"{header_text}\n\n"
             f"{title_line}\n\n"
             f"{vector_line}"

@@ -78,7 +78,7 @@ class RssSource(BaseSource):
                     link=link,
                     published_date=published_date
                 )
-                vulnerabilities.append(vuln)
+                vulnerabilities.append((vuln, None))
             except Exception as e:
                 logger.error(f"[{self.name}] Errore nel processare una voce del feed: {e}", exc_info=True)
 

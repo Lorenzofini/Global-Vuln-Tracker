@@ -112,7 +112,7 @@ class NvdSource(BaseSource):
                     cvss_score = cvss_score,
                     cvss_vector = cvss_vector,
                 )
-                vulnerabilities.append(vuln)
+                vulnerabilities.append((vuln, cve))
             except (KeyError, TypeError, ValueError) as e:
                 logger.error(f"[{self.name}] Errore nel processare una CVE da NVD: {cve_id if 'cve_id' in locals() else 'ID sconosciuto'} - {e}", exc_info=True)
 

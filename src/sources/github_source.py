@@ -82,7 +82,7 @@ class GithubSource(BaseSource):
                     published_date=published_date,
                     description=node.get('description')
                 )
-                vulnerabilities.append(vuln)
+                vulnerabilities.append((vuln, node))
             except (KeyError, TypeError, ValueError) as e:
                 logger.error(f"[{self.name}] Errore nel processare un advisory di GitHub: {e}", exc_info=True)
 

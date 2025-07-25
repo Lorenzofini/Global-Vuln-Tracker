@@ -2,7 +2,7 @@
 import logging  # <-- AGGIUNTO
 import time  # <-- AGGIUNTO
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import requests
 from ..models import Vulnerability
 
@@ -17,10 +17,11 @@ class BaseSource(ABC):
         self.config = kwargs
 
     @abstractmethod
-    def fetch(self) -> List[Vulnerability]:
+    def fetch(self) -> List[Tuple[Vulnerability, Optional[Dict[str, Any]]]]:
         """
         Recupera le vulnerabilità dalla fonte.
-        Deve restituire una lista di oggetti Vulnerability.
+        Restituisce una lista di tuple: (Vulnerability_object, raw_data_dict).
+        Per le fonti senza dati grezzi strutturati (es. RSS), raw_data_dict può essere None.
         """
         pass
 

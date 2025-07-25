@@ -51,7 +51,7 @@ class CisaKevSource(BaseSource):
                     published_date=published_date,
                     description=entry.get('shortDescription', '')
                 )
-                vulnerabilities.append(vuln)
+                vulnerabilities.append((vuln, entry))
             except (KeyError, TypeError, ValueError) as e:
                 logger.error(f"[{self.name}] Errore nel processare una voce di CISA KEV: {e}", exc_info=True)
 
