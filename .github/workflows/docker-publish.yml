@@ -38,6 +38,5 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vulnerability-notifier:latest
-          # Esempio di tag con lo username: 'tuonome/vulnerability-notifier:latest'
-          # Cambia 'vulnerability-notifier' se vuoi un altro nome per l'immagine
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vulnerability-notifier:lates
