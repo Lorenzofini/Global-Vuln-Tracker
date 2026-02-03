@@ -1,16 +1,14 @@
 # src/models.py
 import html
 import datetime
-from dataclasses import dataclass
-
+import re
+import urllib.parse
+from dataclasses import dataclass, field
+from typing import List, Tuple
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 @dataclass(frozen=True, eq=True)
 class Vulnerability:
-    """
-    Rappresenta una singola vulnerabilità in modo standardizzato,
-    indipendentemente dalla fonte.
-    'frozen=True' la rende immutabile e quindi utilizzabile in un set.
-    """
     id: str
     source: str
     title: str
@@ -20,55 +18,54 @@ class Vulnerability:
     cvss_score: float = None
     cvss_vector: str = None
     has_public_exploit: bool = False
+    detected_tags: List[str] = field(default_factory=list)
 
-    def __str__(self):
-        return f"[{self.source}] {self.title}"
-
-    def to_telegram_message(self) -> str:
-        """Formatta la vulnerabilità come messaggio finale per Telegram in HTML."""
-
-        # 1. Definisci etichette e emoji in base alla gravità
-        header_text = "🚨 AVVISO DI SICUREZZA"
-
-        if self.cvss_score is not None:
-            if self.cvss_score >= 9.0:
-                header_text = f"🔥 VULNERABILITÀ CRITICA ({self.cvss_score})"
-            elif self.cvss_score >= 7.0:
-                header_text = f"🔶 VULNERABILITÀ ALTA ({self.cvss_score})"
-            elif self.cvss_score >= 4.0:
-                header_text = f"🟡 VULNERABILITÀ MEDIA ({self.cvss_score})"
-            else:
-                header_text = f"⚪️ VULNERABILITÀ BASSA ({self.cvss_score})"
-
-        exploit_warning = ""
-        if self.has_public_exploit:
-            exploit_warning = "<b>❗️ EXPLOIT PUBBLICO DISPONIBILE ❗️</b>\n\n"
-
-        # 2. Prepara la riga del titolo, facendo l'escape di eventuali caratteri HTML
-        clean_title = html.escape(self.title)
-
-        # Se il titolo è nella forma "CVE-XXXX: Descrizione", lo separiamo
-        if ":" in clean_title and clean_title.upper().startswith("CVE-"):
-            parts = clean_title.split(':', 1)
-            cve_id_part = parts[0].strip()
-            title_part = parts[1].strip()
-            title_line = f"🆔 <code>{cve_id_part}</code>\n📜 <b>{title_part}</b>"
+    def get_ui_elements(self) -> Tuple[str, InlineKeyboardMarkup]:
+        """Restituisce il messaggio e i pulsanti (sempre presenti)."""
+        
+        tags_prefix = "".join([f"[{t.upper()}] " for t in self.detected_tags[:2]])
+        
+        # Colori e Icone
+        if self.cvss_score and self.cvss_score >= 9.0:
+            status_icon, label = "🔴", "CRITICA"
+        elif self.cvss_score and self.cvss_score >= 7.0:
+            status_icon, label = "🟠", "ALTA"
+        elif self.cvss_score and self.cvss_score >= 4.0:
+            status_icon, label = "🟡", "MEDIA"
         else:
-            # Fallback per fonti che non hanno un ID nel titolo (es. news)
-            title_line = f"📜 <b>{clean_title}</b>"
+            status_icon, label = "⚪️", "BASSA/INFO"
 
-        # 3. Prepara la riga del vettore CVSS
-        vector_line = f"📊 <code>{html.escape(self.cvss_vector)}</code>\n" if self.cvss_vector else ""
+        exploit_header = "🔥 <b>EXPLOIT PUBBLICO DISPONIBILE</b>\n" if self.has_public_exploit else ""
+        
+        clean_desc = html.escape(self.description or "Nessuna descrizione fornita.")
+        if len(clean_desc) > 300:
+            clean_desc = clean_desc[:297] + "..."
 
-        # 4. Assembla il messaggio finale
         message = (
-            f"{exploit_warning}\n"
-            f"{header_text}\n\n"
-            f"{title_line}\n\n"
-            f"{vector_line}"
-            f"🗓️ {self.published_date.strftime('%d-%m-%Y')}\n"
-            f"📰 Fonte: {self.source}\n"
-            f"🔗 <a href='{self.link}'>Dettagli completi</a>"
+            f"{exploit_header}"
+            f"{status_icon} <b>LIVELLO {label}: {self.cvss_score or 'N/A'}</b>\n"
+            f"<code>━━━━━━━━━━━━━━━</code>\n\n"
+            f"📜 <b>{tags_prefix}{html.escape(self.title)}</b>\n\n"
+            f"🆔 <b>ID:</b> <code>{html.escape(self.id[:30])}</code>\n"
+            f"📖 <b>DESC:</b> <i>{clean_desc}</i>\n\n"
+            f"🗓 {self.published_date.strftime('%d/%m/%Y')} | 📡 {html.escape(self.source)}"
         )
 
-        return message
+        # Costruzione dinamica della tastiera
+        row1 = [InlineKeyboardButton("🌐 Fonte", url=self.link)]
+        
+        # 1. Prova a estrarre CVE da Titolo, ID o Descrizione
+        full_text = f"{self.id} {self.title} {self.description}".upper()
+        cve_match = re.search(r'CVE-\d{4}-\d+', full_text)
+        
+        if cve_match:
+            cve_id = cve_match.group(0)
+            row1.append(InlineKeyboardButton("🔍 Analizza NVD", url=f"https://nvd.nist.gov/vuln/detail/{cve_id}"))
+        else:
+            # 2. Se non c'è il CVE, offriamo una ricerca rapida su Google
+            search_query = urllib.parse.quote(self.title)
+            row1.append(InlineKeyboardButton("🔎 Cerca Info", url=f"https://www.google.com/search?q={search_query}"))
+
+        keyboard = InlineKeyboardMarkup([row1])
+        
+        return message, keyboard

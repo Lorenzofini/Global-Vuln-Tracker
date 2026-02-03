@@ -6,19 +6,15 @@ import html
 
 logger = logging.getLogger(__name__)
 
-
 def send_admin_alert(message: str, critical: bool = False):
     admin_chat_id = os.getenv("ADMIN_CHAT_ID")
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
 
-    # logger.info(f"Tentativo di invio alert all'admin. CHAT_ID: {admin_chat_id}, TOKEN trovato: {'Sì' if bot_token else 'No'}")
-
     if not admin_chat_id or not bot_token:
-        logger.warning("ADMIN_CHAT_ID non impostato. Impossibile inviare alert all'admin.")
+        logger.warning("ADMIN_CHAT_ID o TOKEN non impostati. Alert saltato.")
         return
 
-    prefix = "🚨 ERRORE CRITICO 🚨\n" if critical else "ℹ️ INFO BOT ℹ️\n"
-
+    prefix = "🚨 <b>ERRORE CRITICO</b> 🚨\n" if critical else "ℹ️ <b>INFO BOT</b>\n"
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": admin_chat_id,
@@ -27,8 +23,10 @@ def send_admin_alert(message: str, critical: bool = False):
     }
 
     try:
-        response = requests.post(url, data=payload, timeout=10)
+        # Timeout ridotto per non bloccare lo spegnimento
+        response = requests.post(url, data=payload, timeout=5)
         if not response.ok:
-            logger.error(f"Fallito l'invio dell'alert all'admin: {response.text}")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Eccezione durante l'invio dell'alert all'admin: {e}")
+            logger.error(f"Invio alert fallito: {response.text}")
+    except Exception as e:
+        # In fase di chiusura (KeyboardInterrupt), requests potrebbe fallire
+        logger.debug(f"Impossibile inviare alert admin durante la chiusura: {e}")

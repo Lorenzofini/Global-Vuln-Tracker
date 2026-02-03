@@ -1,86 +1,60 @@
 # src/sources/rss_source.py
 import logging
 import feedparser
-import pytz
 import requests
+import re
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Tuple, Dict, Optional, Any
 from .base_source import BaseSource
 from ..models import Vulnerability
 
 logger = logging.getLogger(__name__)
 
-
 class RssSource(BaseSource):
-    """Gestisce la raccolta di vulnerabilità da feed RSS/Atom."""
-
-    def fetch(self) -> List[Vulnerability]:
+    def fetch(self) -> List[Tuple[Vulnerability, Optional[Dict[str, Any]]]]:
         url = self.config.get("url")
-        if not url:
-            logger.error(f"[{self.name}] URL non specificato nella configurazione.")
-            return []
-
-        # logger.info(f"[{self.name}] Sto recuperando dati da feed RSS: {url}")
-        feed = feedparser.parse(url)
-
-        # headers = {
-        #     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0'
-        # }
-        #
-        # try:
-        #     # Passiamo gli header alla richiesta
-        #     response = requests.get(url, headers=headers, timeout=15)
-        #     response.raise_for_status()
-        #     # Passiamo il contenuto della risposta a feedparser invece dell'URL
-        #     feed = feedparser.parse(response.content)
-        # except requests.RequestException as e:
-        #     logger.error(f"[{self.name}] Errore di rete nel recuperare il feed: {e}")
-        #     return []
-
-        if feed.bozo:
-            logger.warning(f"[{self.name}] Il feed RSS potrebbe essere malformato: {feed.bozo_exception}")
+        if not url: return []
 
         vulnerabilities = []
-        for entry in feed.entries:
-            try:
-                title = entry.get("title", "N/A")
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+            response = requests.get(url, headers=headers, timeout=15)
+            response.raise_for_status()
+            
+            # --- SANITIZZAZIONE XML ---
+            content = response.text.strip()
+            # Rimuove tutto ciò che precede la dichiarazione XML <?xml...
+            content = re.sub(r'^[^<]*', '', content)
+            
+            feed = feedparser.parse(content)
+
+            if not feed.entries and feed.bozo:
+                logger.warning(f"[{self.name}] Feed critico malformato, salto fonte.")
+                return []
+
+            for entry in feed.entries:
                 link = entry.get("link", "")
+                if not link: continue
 
-                # 'link' è il nostro ID univoco per i feed RSS
-                if not link:
-                    logger.warning(f"[{self.name}] Trovata voce senza link, la salto: {title}")
-                    continue
-
-                # Gestione robusta della data di pubblicazione
-                published_date = None
+                # Gestione data di pubblicazione
                 pub_date_struct = entry.get("published_parsed") or entry.get("updated_parsed")
+                published_date = datetime(*pub_date_struct[:6], tzinfo=timezone.utc) if pub_date_struct else datetime.now(timezone.utc)
 
-                if pub_date_struct:
-                    # Converte da time.struct_time a datetime
-                    dt_naive = datetime(*pub_date_struct[:6])
-
-                    # Se il feedparser non ha aggiunto un fuso orario, lo aggiungiamo noi (assumendo UTC)
-                    if dt_naive.tzinfo is None:
-                        published_date = dt_naive.replace(tzinfo=timezone.utc)
-                    else:
-                        # Se c'è già un fuso orario, lo normalizziamo a UTC per coerenza
-                        published_date = dt_naive.astimezone(timezone.utc)
-                else:
-                    # Fallback finale se nessun campo data è stato trovato
-                    logger.warning(
-                        f"[{self.name}] Data non trovata o non parsabile per '{title}', uso la data attuale.")
-                    published_date = datetime.now(timezone.utc)
+                has_exploit = "exploit-db" in self.url.lower() or "exploit" in entry.title.lower()
 
                 vuln = Vulnerability(
-                    id=link,
+                    id=entry.id,
                     source=self.name,
-                    title=title.strip(),
+                    title=entry.title,
                     link=link,
-                    published_date=published_date
+                    has_public_exploit=has_exploit,
+                    published_date=published_date,
+                    description=entry.get("summary", entry.get("description", ""))
                 )
                 vulnerabilities.append((vuln, None))
-            except Exception as e:
-                logger.error(f"[{self.name}] Errore nel processare una voce del feed: {e}", exc_info=True)
 
-        logger.info(f"[{self.name}] Trovate {len(vulnerabilities)} voci dal feed.")
+        except Exception as e:
+            logger.error(f"[{self.name}] Errore fetch: {e}")
+
+        logger.info(f"[{self.name}] Trovate {len(vulnerabilities)} voci.")
         return vulnerabilities
