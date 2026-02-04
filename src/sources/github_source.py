@@ -2,7 +2,7 @@
 import logging
 import requests
 from datetime import datetime, timedelta, timezone
-from typing import List
+from typing import List, Tuple, Dict, Optional, Any
 from .base_source import BaseSource
 from ..models import Vulnerability
 
@@ -16,10 +16,11 @@ class GithubSource(BaseSource):
     """
     API_URL = "https://api.github.com/graphql"
 
-    def fetch(self) -> List[Vulnerability]:
+    def fetch(self) -> List[Tuple[Vulnerability, Optional[Dict[str, Any]]]]:
         token = self.config.get('credentials', {}).get('github_token')
         if not token:
-            logger.warning(f"[{self.name}] Token GitHub non fornito. Fonte disabilitata.")
+            # FIX: Usa logger.debug invece di logger.warning per ridurre il rumore
+            logger.debug(f"[{self.name}] Token GitHub non fornito. Fonte disabilitata.")
             return []
 
         headers = {"Authorization": f"bearer {token}"}
@@ -72,7 +73,8 @@ class GithubSource(BaseSource):
                 if not ghsa_id:
                     continue
 
-                published_date = datetime.fromisoformat(node['publishedAt'].replace('Z', ''))
+                # FIX: Aggiungi timezone UTC alla data
+                published_date = datetime.fromisoformat(node['publishedAt'].replace('Z', '+00:00'))
 
                 vuln = Vulnerability(
                     id=ghsa_id,
@@ -80,7 +82,7 @@ class GithubSource(BaseSource):
                     title=f"GitHub Advisory: {node.get('summary', 'N/A')}",
                     link=node.get('permalink'),
                     published_date=published_date,
-                    description=node.get('description')
+                    description=node.get('description', '')
                 )
                 vulnerabilities.append((vuln, node))
             except (KeyError, TypeError, ValueError) as e:

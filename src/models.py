@@ -1,8 +1,7 @@
-# src/models.py
 import html
-import datetime
 import re
-import urllib.parse
+import datetime
+from datetime import timezone
 from dataclasses import dataclass, field
 from typing import List, Tuple
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -20,52 +19,188 @@ class Vulnerability:
     has_public_exploit: bool = False
     detected_tags: List[str] = field(default_factory=list)
 
+    def _get_urgency_config(self) -> dict:
+        """Strategia di urgenza basata su psicologia + data"""
+        score = self.cvss_score or 0.0
+        
+        if self.has_public_exploit:
+            return {
+                "emoji": "🔴",
+                "badge": "ACTIVE EXPLOIT",
+                "action_verb": "VAI ALLA FONTE"
+            }
+        elif score >= 9.0:
+            return {
+                "emoji": "🔴",
+                "badge": "CRITICAL SEVERITY",
+                "action_verb": "VAI ALLA FONTE"
+            }
+        elif score >= 7.0:
+            return {
+                "emoji": "🟠",
+                "badge": "HIGH SEVERITY",
+                "action_verb": "VAI ALLA FONTE"
+            }
+        elif score >= 4.0:
+            return {
+                "emoji": "🟡",
+                "badge": "MEDIUM SEVERITY",
+                "action_verb": "VAI ALLA FONTE"
+            }
+        else:
+            return {
+                "emoji": "🔵",
+                "badge": "LOW SEVERITY",
+                "action_verb": "VAI ALLA FONTE"
+            }
+
+    def _format_score_visual(self) -> str:
+        """Score visivo IMMEDIATO"""
+        if not self.cvss_score:
+            return "Non valutato"
+        
+        score = self.cvss_score
+        filled = int(score)
+        bar = "█" * filled + "░" * (10 - filled)
+        return f"{bar} {score}/10"
+
+    def _clean_source_name(self) -> str:
+        """Nome fonte leggibile"""
+        if "CISA" in self.source.upper():
+            return "🏛️ CISA KEV"
+        elif "NVD" in self.source.upper():
+            return "🗂️ NVD"
+        else:
+            return f"📰 {self.source[:15]}"
+
+    def _time_ago(self) -> str:
+        """Human-readable time"""
+        now = datetime.datetime.now(timezone.utc)
+        
+        pub_date = self.published_date
+        if pub_date.tzinfo is None:
+            pub_date = pub_date.replace(tzinfo=timezone.utc)
+        
+        diff = now - pub_date
+        
+        if diff.days == 0:
+            hours = diff.seconds // 3600
+            if hours == 0:
+                return "🔥 APPENA PUBBLICATA"
+            return f"🕐 {hours}h fa"
+        elif diff.days == 1:
+            return "📅 Ieri"
+        elif diff.days < 7:
+            return f"📅 {diff.days} giorni fa"
+        else:
+            return pub_date.strftime("%d/%m/%Y")
+
+    def _clean_html_description(self, text: str) -> str:
+        """Pulisce HTML dalla descrizione e formatta per Telegram"""
+        if not text:
+            return "Nessuna descrizione disponibile."
+        
+        # Rimuovi tutti i tag HTML
+        text = re.sub(r'<[^>]+>', ' ', text)
+        
+        # Decodifica entità HTML (&nbsp; → spazio, ecc.)
+        text = html.unescape(text)
+        
+        # Rimuovi spazi multipli
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Rimuovi spazi all'inizio/fine
+        text = text.strip()
+        
+        return text
+
     def get_ui_elements(self) -> Tuple[str, InlineKeyboardMarkup]:
-        """Restituisce il messaggio e i pulsanti (sempre presenti)."""
+        urg = self._get_urgency_config()
         
-        tags_prefix = "".join([f"[{t.upper()}] " for t in self.detected_tags[:2]])
-        
-        # Colori e Icone
-        if self.cvss_score and self.cvss_score >= 9.0:
-            status_icon, label = "🔴", "CRITICA"
-        elif self.cvss_score and self.cvss_score >= 7.0:
-            status_icon, label = "🟠", "ALTA"
-        elif self.cvss_score and self.cvss_score >= 4.0:
-            status_icon, label = "🟡", "MEDIA"
-        else:
-            status_icon, label = "⚪️", "BASSA/INFO"
-
-        exploit_header = "🔥 <b>EXPLOIT PUBBLICO DISPONIBILE</b>\n" if self.has_public_exploit else ""
-        
-        clean_desc = html.escape(self.description or "Nessuna descrizione fornita.")
-        if len(clean_desc) > 300:
-            clean_desc = clean_desc[:297] + "..."
-
-        message = (
-            f"{exploit_header}"
-            f"{status_icon} <b>LIVELLO {label}: {self.cvss_score or 'N/A'}</b>\n"
-            f"<code>━━━━━━━━━━━━━━━</code>\n\n"
-            f"📜 <b>{tags_prefix}{html.escape(self.title)}</b>\n\n"
-            f"🆔 <b>ID:</b> <code>{html.escape(self.id[:30])}</code>\n"
-            f"📖 <b>DESC:</b> <i>{clean_desc}</i>\n\n"
-            f"🗓 {self.published_date.strftime('%d/%m/%Y')} | 📡 {html.escape(self.source)}"
+        # HEADER: Solo emoji + badge
+        header = (
+            f"{urg['emoji']} <b>{urg['badge']}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━"
         )
+        
+        # CVE ID + Score
+        hero = (
+            f"\n<b>🆔 {self.id}</b>\n"
+            f"📊 {self._format_score_visual()}\n"
+        )
+        
+        # CVSS Vector (se presente)
+        vector_line = ""
+        if self.cvss_vector:
+            vector_line = f"🧬 <code>{self.cvss_vector}</code>\n"
+        
+        # Titolo vulnerabilità (pulito da HTML)
+        clean_title = self._clean_html_description(self.title)
+        vuln_title = html.escape(clean_title[:120])
+        if len(clean_title) > 120:
+            vuln_title += "..."
+        
+        # Descrizione (pulita da HTML)
+        clean_desc = self._clean_html_description(self.description)
+        desc = html.escape(clean_desc[:300])
+        if len(clean_desc) > 300:
+            desc += "..."
+        
+        # Footer compatto
+        footer = (
+            f"\n━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📡 {self._clean_source_name()}  •  {self._time_ago()}"
+        )
+        
+        # MESSAGGIO FINALE
+        message = (
+            f"{header}"
+            f"{hero}"
+            f"{vector_line}"
+            f"\n💬 <b>{vuln_title}</b>\n\n"
+            f"<i>{desc}</i>"
+            f"{footer}"
+        )
+        
+        # BOTTONI DIFFERENZIATI
+        buttons = []
 
-        # Costruzione dinamica della tastiera
-        row1 = [InlineKeyboardButton("🌐 Fonte", url=self.link)]
+        search_query = self.id if self.id.startswith("CVE-") else f"{self.title[:50]}"
         
-        # 1. Prova a estrarre CVE da Titolo, ID o Descrizione
-        full_text = f"{self.id} {self.title} {self.description}".upper()
-        cve_match = re.search(r'CVE-\d{4}-\d+', full_text)
-        
-        if cve_match:
-            cve_id = cve_match.group(0)
-            row1.append(InlineKeyboardButton("🔍 Analizza NVD", url=f"https://nvd.nist.gov/vuln/detail/{cve_id}"))
-        else:
-            # 2. Se non c'è il CVE, offriamo una ricerca rapida su Google
-            search_query = urllib.parse.quote(self.title)
-            row1.append(InlineKeyboardButton("🔎 Cerca Info", url=f"https://www.google.com/search?q={search_query}"))
+        # Prima riga: Fonte originale + Ricerca exploit
+        row1 = [
+            InlineKeyboardButton(
+                f"📄 {urg['action_verb']}", 
+                url=self.link
+            ),
+            InlineKeyboardButton(
+                "🔍 Cerca Info",
+                url=f"https://www.google.com/search?q={search_query}+vulnerability"
+            )
+        ]
+        buttons.append(row1)
 
-        keyboard = InlineKeyboardMarkup([row1])
+        if self.id.startswith("CVE-"):
+            row2 = [
+                InlineKeyboardButton(
+                    "📚 NVD Database",
+                    url=f"https://nvd.nist.gov/vuln/detail/{self.id}"
+                ),
+                InlineKeyboardButton(
+                    "🔬 MITRE Info",
+                    url=f"https://cve.mitre.org/cgi-bin/cvename.cgi?name={self.id}"
+                )
+            ]
+            buttons.append(row2)
         
-        return message, keyboard
+        # Terza riga condizionale: se exploit pubblico
+        if self.has_public_exploit:
+            row3 = [
+                InlineKeyboardButton(
+                    "⚠️ Condividi Urgenza",
+                    switch_inline_query=f"🚨 {self.id} - EXPLOIT PUBBLICO ATTIVO"
+                )
+            ]
+            buttons.append(row3)
+        
+        return message, InlineKeyboardMarkup(buttons)
