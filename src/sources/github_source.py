@@ -19,14 +19,13 @@ class GithubSource(BaseSource):
     def fetch(self) -> List[Tuple[Vulnerability, Optional[Dict[str, Any]]]]:
         token = self.config.get('credentials', {}).get('github_token')
         if not token:
-            # FIX: Usa logger.debug invece di logger.warning per ridurre il rumore
+            # Usa logger.debug invece di warning per ridurre rumore
             logger.debug(f"[{self.name}] Token GitHub non fornito. Fonte disabilitata.")
             return []
 
         headers = {"Authorization": f"bearer {token}"}
 
         # Cerchiamo avvisi pubblicati nell'ultimo giorno.
-        # GitHub supporta il filtro 'publishedSince'.
         fetch_since = self.config.get('fetch_since')
         since_date_str = fetch_since.isoformat()
 
@@ -73,7 +72,7 @@ class GithubSource(BaseSource):
                 if not ghsa_id:
                     continue
 
-                # FIX: Aggiungi timezone UTC alla data
+                # FIX: Gestisci correttamente il timezone UTC
                 published_date = datetime.fromisoformat(node['publishedAt'].replace('Z', '+00:00'))
 
                 vuln = Vulnerability(

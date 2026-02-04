@@ -16,8 +16,8 @@ class RssSource(BaseSource):
         Estrae CVE ID dal contenuto, altrimenti usa un ID alternativo.
         Priorità:
         1. CVE-YYYY-NNNNN nel titolo o descrizione
-        2. entry.id se esiste
-        3. Parte finale del link
+        2. entry.id se esiste e valido
+        3. ID dall'URL
         4. Hash del titolo (fallback)
         """
         # 1. Cerca CVE nel titolo e descrizione
@@ -35,7 +35,7 @@ class RssSource(BaseSource):
             # Se è un path come /node/15578, puliscilo
             if '/' in entry_id:
                 entry_id = entry_id.split('/')[-1]
-            # Se non è vuoto, usalo con prefisso della fonte
+            # Se non è vuoto e non è HTTP, usalo con prefisso
             if entry_id and not entry_id.startswith('http'):
                 return f"{self._get_source_prefix()}-{entry_id}"
         
@@ -43,7 +43,7 @@ class RssSource(BaseSource):
         link = entry.get('link', '')
         if link:
             # Cerca pattern comuni negli URL
-            url_id_match = re.search(r'/(?:node|article|post|advisory)/(\d+)', link)
+            url_id_match = re.search(r'/(?:node|article|post|advisory|alert)/(\w+)', link)
             if url_id_match:
                 return f"{self._get_source_prefix()}-{url_id_match.group(1)}"
             
@@ -51,7 +51,7 @@ class RssSource(BaseSource):
             url_parts = link.rstrip('/').split('/')
             if url_parts:
                 last_part = url_parts[-1]
-                if last_part and not last_part.startswith('http'):
+                if last_part and not last_part.startswith('http') and len(last_part) < 50:
                     return f"{self._get_source_prefix()}-{last_part}"
         
         # 4. Fallback: hash del titolo (per evitare duplicati)
@@ -67,8 +67,9 @@ class RssSource(BaseSource):
             "CERT-EU": "CERTEU",
             "ACN": "ACN",
             "ExploitDB": "EDB",
-            "The Hacker News": "THN",
-            "BleepingComputer": "BLEEPING"
+            "Hacker News": "THN",
+            "BleepingComputer": "BLEEPING",
+            "OSV.dev": "OSV"
         }
         
         # Cerca match parziale
@@ -76,13 +77,14 @@ class RssSource(BaseSource):
             if key.lower() in self.name.lower():
                 return prefix
         
-        # Fallback: prime 3 lettere maiuscole
+        # Fallback: prime lettere maiuscole
         clean_name = re.sub(r'[^A-Za-z]', '', self.name)
         return clean_name[:6].upper() or "RSS"
 
     def fetch(self) -> List[Tuple[Vulnerability, Optional[Dict[str, Any]]]]:
         url = self.config.get("url")
-        if not url: return []
+        if not url: 
+            return []
 
         vulnerabilities = []
         try:
@@ -99,7 +101,7 @@ class RssSource(BaseSource):
             # Controlla se il feed ha problemi critici
             if feed.bozo:
                 if feed.entries:
-                    logger.debug(f"[{self.name}] Feed con errori minori, ma elaborabile.")
+                    logger.debug(f"[{self.name}] Feed con errori minori, ma elaborabile. Trovate {len(feed.entries)} entry potenziali.")
                 else:
                     logger.warning(f"[{self.name}] Feed critico malformato (nessuna entry), salto fonte.")
                     return []

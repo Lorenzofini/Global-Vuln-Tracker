@@ -1,3 +1,4 @@
+# src/models.py
 import html
 import re
 import datetime
@@ -164,23 +165,27 @@ class Vulnerability:
         
         # BOTTONI DIFFERENZIATI
         buttons = []
-
-        search_query = self.id if self.id.startswith("CVE-") else f"{self.title[:50]}"
         
-        # Prima riga: Fonte originale + Ricerca exploit
+        # Prima riga: Fonte originale + Ricerca
+        # Se è CVE cerca exploit, altrimenti cerca info generiche
+        is_cve = self.id.startswith("CVE-")
+        search_query = self.id if is_cve else f"{clean_title[:50]} vulnerability"
+        search_label = "🔍 Cerca Exploit" if is_cve else "🔍 Cerca Info"
+        
         row1 = [
             InlineKeyboardButton(
                 f"📄 {urg['action_verb']}", 
                 url=self.link
             ),
             InlineKeyboardButton(
-                "🔍 Cerca Info",
-                url=f"https://www.google.com/search?q={search_query}+vulnerability"
+                search_label,
+                url=f"https://www.google.com/search?q={search_query}"
             )
         ]
         buttons.append(row1)
-
-        if self.id.startswith("CVE-"):
+        
+        # Seconda riga: Database tecnici (solo per CVE)
+        if is_cve:
             row2 = [
                 InlineKeyboardButton(
                     "📚 NVD Database",
