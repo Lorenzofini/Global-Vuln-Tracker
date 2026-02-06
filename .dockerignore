@@ -6,6 +6,7 @@ venv/
 __pycache__/
 *.pyc
 
+
 # Ignora i file di configurazione di Git e IDE
 .git/
 .gitignore
