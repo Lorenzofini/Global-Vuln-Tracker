@@ -1,5 +1,12 @@
+# Core dependencies
 requests==2.31.0
 feedparser==6.0.10
 python-dotenv==1.0.1
 PyYAML==6.0.1
 pytz==2024.1
+
+# Telegram Bot
+python-telegram-bot==21.3
+
+# Async HTTP (per NVD helper)
+aiohttp==3.9.5

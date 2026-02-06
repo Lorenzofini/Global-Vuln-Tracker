@@ -1,52 +1,77 @@
-# config.yaml (Versione aggiornata per Topics)
+# config.yaml (Versione 2.0 - Action-Based Topics)
 
 settings:
-  # polling_interval_minutes: 15
   polling_interval_minutes: 2
-  # start_date: "2025-01-01"
   start_date: "2025-01-01"
 
-  # --- NUOVA SEZIONE PER I TOPICS ---
-  # Questa sezione sostituisce la vecchia sezione 'filters'.
+  # --- NUOVA ARCHITETTURA: ACTION-BASED TOPICS ---
+  # I topic sono ora basati su COSA FARE, non su chi è il vendor.
+  # Questo elimina la necessità di configurare vendor e semplifica l'uso.
   topics:
     enabled: true
-    
-    # IMPORTANTE: Inserisci qui l'ID del tuo GRUPPO Telegram con i Topics abilitati.
-    # Deve essere un numero negativo tra virgolette (es. "-1001234567890").
-    main_chat_id: "-1003777333446" 
 
-    # Nome del topic "Generale" dove finiscono le vulnerabilità non categorizzate.
-    # Il bot lo creerà automaticamente se non esiste.
+    # ID del GRUPPO Telegram con i Topics abilitati.
+    main_chat_id: "-1003777333446"
+
+    # NUOVA MODALITÀ: action_based
+    # true = usa i 4 topic basati su azione (🔴 PATCH NOW, 🟠 PLAN THIS WEEK, etc.)
+    # false = usa la vecchia logica vendor-based (deprecata)
+    action_based: true
+
+    # Mappa dei topic Action-Based
+    # Questi topic dicono all'utente COSA FARE, non cosa è successo
+    action_topics:
+      # Azione immediata: exploit attivi, ransomware, CVSS 9+ con network attack
+      patch_now: "🔴 PATCH NOW"
+
+      # Da pianificare questa settimana: CVSS 7-8.9, vulnerabilità importanti
+      plan_week: "🟠 PLAN THIS WEEK"
+
+      # Monitorare: CVSS 4-6.9, rischio moderato
+      monitor: "🟡 MONITOR"
+
+      # News e articoli senza CVE specifico
+      intel: "📰 INTEL BRIEFING"
+
+      # Riepilogo settimanale automatico
+      digest: "📊 Weekly Digest"
+
+      # Threat intelligence: campagne ransomware, APT, trend
+      threat_intel: "🎯 Threat Intel"
+
+    # FALLBACK: Topic generale per edge cases
     general_topic_name: "Generale"
 
-    # Mappa che associa un VENDOR (in minuscolo) al NOME del topic desiderato.
-    # Puoi usare lo stesso nome di topic per raggruppare più vendor.
+    # BANNER IMMAGINI (opzionale)
+    # Abilita per inviare messaggi con immagine banner
+    use_banners: false
+
+    # URL delle immagini banner per ogni livello di severità
+    # Puoi usare URL pubblici o caricare le tue immagini
+    banners:
+      critical: ""  # URL immagine per CRITICAL (rosso)
+      high: ""      # URL immagine per HIGH (arancione)
+      medium: ""    # URL immagine per MEDIUM (giallo)
+      low: ""       # URL immagine per LOW (blu)
+      intel: ""     # URL immagine per INTEL (news)
+
+    # DEPRECATO: Manteniamo per retrocompatibilità ma non usato se action_based=true
     vendor_to_topic_name_map:
       microsoft: "Microsoft & Windows"
       windows: "Microsoft & Windows"
-      exchange: "Microsoft & Windows"
-      azure: "Microsoft & Windows"
 
-      vmware: "Virtualizzazione & Cloud"
-      
-      cisco: "Networking & Security"
-      fortinet: "Networking & Security"
-      juniper: "Networking & Security"
-      
-      apache: "Server & Servizi Web"
-      nginx: "Server & Servizi Web"
-      
-      linux: "Linux & Open Source"
-      kernel: "Linux & Open Source"
-      openssl: "Linux & Open Source"
-      php: "Linux & Open Source"
-      
-    # Mappa che associa la GRAVITÀ al NOME del topic desiderato.
-    # Una CVE può finire in più topic (es. in "Microsoft" e in "Critiche").
     severity_to_topic_name_map:
       critical: "🔥 CVE Critiche (9.0+)"
       high: "🔶 CVE Alte (7.0-8.9)"
-      # Puoi aggiungere 'medium' e 'low' se vuoi creare topic anche per quelle.
+
+  # Configurazione Weekly Digest
+  digest:
+    enabled: true
+    # Giorno della settimana (0=lunedì, 6=domenica)
+    day_of_week: 6
+    # Ora di invio (formato 24h)
+    hour: 10
+    minute: 0
 
 # Elenco delle fonti di vulnerabilità (questa parte rimane quasi invariata)
 sources:

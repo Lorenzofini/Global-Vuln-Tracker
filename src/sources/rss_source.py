@@ -59,6 +59,57 @@ class RssSource(BaseSource):
         title_hash = hashlib.md5(entry.title.encode()).hexdigest()[:8]
         return f"{self._get_source_prefix()}-{title_hash}"
     
+    def _extract_image_url(self, entry) -> Optional[str]:
+        """
+        Estrae l'URL dell'immagine dall'entry RSS.
+        Cerca in ordine:
+        1. media:content o media:thumbnail
+        2. enclosure di tipo image
+        3. Tag <img> nel contenuto/summary
+        4. og:image nei link
+        """
+        # 1. Media content (usato da molti feed)
+        if hasattr(entry, 'media_content') and entry.media_content:
+            for media in entry.media_content:
+                if media.get('type', '').startswith('image/') or media.get('medium') == 'image':
+                    return media.get('url')
+
+        # 2. Media thumbnail
+        if hasattr(entry, 'media_thumbnail') and entry.media_thumbnail:
+            for thumb in entry.media_thumbnail:
+                if thumb.get('url'):
+                    return thumb.get('url')
+
+        # 3. Enclosure
+        if hasattr(entry, 'enclosures') and entry.enclosures:
+            for enc in entry.enclosures:
+                if enc.get('type', '').startswith('image/'):
+                    return enc.get('href') or enc.get('url')
+
+        # 4. Cerca img nel contenuto HTML
+        content = entry.get('content', [{}])
+        if content and isinstance(content, list):
+            html_content = content[0].get('value', '')
+        else:
+            html_content = entry.get('summary', '') or entry.get('description', '')
+
+        if html_content:
+            # Cerca primo tag <img src="...">
+            img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', html_content, re.IGNORECASE)
+            if img_match:
+                img_url = img_match.group(1)
+                # Verifica che sia un URL valido
+                if img_url.startswith('http'):
+                    return img_url
+
+        # 5. Cerca link con type image
+        if hasattr(entry, 'links'):
+            for link in entry.links:
+                if link.get('type', '').startswith('image/'):
+                    return link.get('href')
+
+        return None
+
     def _get_source_prefix(self) -> str:
         """Genera un prefisso corto per la fonte"""
         # Mappa personalizzata per fonti note
@@ -121,6 +172,9 @@ class RssSource(BaseSource):
                 # Determina se ha exploit
                 has_exploit = "exploit-db" in url.lower() or "exploit" in entry.title.lower()
 
+                # Estrai immagine dall'articolo
+                image_url = self._extract_image_url(entry)
+
                 vuln = Vulnerability(
                     id=vuln_id,
                     source=self.name,
@@ -128,9 +182,10 @@ class RssSource(BaseSource):
                     link=link,
                     has_public_exploit=has_exploit,
                     published_date=published_date,
-                    description=entry.get("summary", entry.get("description", ""))
+                    description=entry.get("summary", entry.get("description", "")),
+                    image_url=image_url
                 )
-                vulnerabilities.append((vuln, None))
+                vulnerabilities.append((vuln, {"image_url": image_url} if image_url else None))
 
         except Exception as e:
             logger.error(f"[{self.name}] Errore fetch: {e}")
